@@ -10,6 +10,7 @@ let dataStore = {
   },
 };
 
+// Event reducer
 function EventReducer(state, event) {
   switch (event.type) {
     case "ADD_USER":
@@ -35,26 +36,78 @@ function EventReducer(state, event) {
   }
 }
 
+// Curried function to log and dispatch events
+const logActions = (logger) => (reducer) => (state, event) => {
+  logger(event);
+  return reducer(state, event);
+};
+
+const consoleLogger = (event) => console.log("Dispatching event:", event);
+
+const dispatchEvent = logActions(consoleLogger)(EventReducer);
+
+// Undo and Redo functionality
+const createHistory = (initialState) => ({
+  past: [],
+  present: initialState,
+  future: [],
+});
+
+const history = createHistory(dataStore);
+
+// Curried Undo and Redo functions
+const undoAction = (history) => () => {
+  const { past, present, future } = history;
+  if (past.length === 0) return;
+  const lastState = past.pop();
+  history.future.push(present);
+  history.present = lastState;
+};
+
+const redoAction = (history) => () => {
+  const { past, present, future } = history;
+  if (future.length === 0) return;
+  const nextState = future.pop();
+  past.push(present);
+  history.present = nextState;
+};
+
+// Curried dispatch with history
+const dispatchWithHistory = (dispatch, history) => (event) => {
+  const { past, present } = history;
+  history.past.push(present);
+  history.future.length = 0; // clear future on new action
+  history.present = dispatch(present, event);
+};
+
 // Testing the setup
 function main() {
-  let state = dataStore;
-  state = EventReducer(state, {
+  const dispatch = dispatchWithHistory(dispatchEvent, history);
+  console.log("Initial:", dataStore);
+
+  dispatch({
     type: "ADD_USER",
     payload: { id: 1, name: "Bisrat Kebere" },
   });
-  console.log("After ADD_USER:", state);
+  console.log("After ADD_USER:", history.present);
 
-  state = EventReducer(state, {
+  dispatch({
     type: "LOGIN_USER",
     payload: { id: 1, name: "Bisrat Kebere" },
   });
-  console.log("After LOGIN_USER:", state);
+  console.log("After LOGIN_USER:", history.present);
 
-  state = EventReducer(state, {
+  dispatch({
     type: "ADD_ITEM",
     payload: { id: 101, name: "Tikus Biskut" },
   });
-  console.log("After ADD_ITEM:", state);
+  console.log("After ADD_ITEM:", history.present);
+
+  undoAction(history)();
+  console.log("After undo:", history.present);
+
+  redoAction(history)();
+  console.log("After redo:", history.present);
 }
 
 main();
